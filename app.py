@@ -49,7 +49,7 @@ st.set_page_config(
 # SET YOUR TEST API KEY HERE
 # (For actual production, store securely in st.secrets or environment variables)
 # ---------------------------------------
-API_KEY = "my_test_api_key_123"  # <-- Your test key here
+API_KEY = "AIzaSyB-RIjhhODp6aPTzqVcwbXD894oebXFCUY"  # <-- Your test key here
 
 if not API_KEY:
     st.error("Please set your Google API key in the code or in secrets.toml.")
