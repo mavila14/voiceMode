@@ -1,9 +1,3 @@
-"""
-Munger AI - Streamlit Application
-
-A modern Streamlit application for Munger AI purchase decision analysis.
-"""
-
 import streamlit as st
 import re
 import json
@@ -15,16 +9,307 @@ import google.generativeai as genai
 import os
 import logging
 
-# Error handling imports
 from google.generativeai.types import GenerationConfigDict
 from google.api_core.exceptions import InvalidArgument, ResourceExhausted
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# -------------------------------------------------------------------
+# Inline CSS (inspired by Streamly layout and minimal design approach)
+# -------------------------------------------------------------------
+custom_css = """
+<style>
+/* GENERAL APP CONTAINER */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #F8FBFD; /* Light background akin to Streamly */
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+.main, .stApp {
+    background-color: #F8FBFD !important;
+    color: #333;
+}
 
-# ---------------------------------------
-# SET PAGE CONFIG
-# ---------------------------------------
+/* HEADER STYLING */
+.app-title {
+    font-weight: 900;
+    font-size: 2.4rem;
+    color: #2c3e50;
+    margin-bottom: 0.3rem;
+}
+.app-subtitle {
+    font-weight: 400;
+    font-size: 1.1rem;
+    color: #8898aa;
+}
+.logo-container {
+    font-size: 2.4rem;
+    font-weight: 900;
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+/* SIDEBAR STYLING */
+.block-container {
+    padding-top: 1rem !important;
+}
+.sidebar .sidebar-content {
+    background-color: #ffffff !important;
+}
+.sidebar-header {
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+.sidebar-subheader {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 0.3rem;
+    color: #2c3e50;
+}
+.sidebar-about {
+    font-size: 0.9rem;
+    color: #444;
+    margin-bottom: 1rem;
+}
+.sidebar-footer {
+    margin-top: 2rem;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* BUTTON STYLING */
+.stButton button {
+    background-color: #3182CE !important;
+    color: #fff !important;
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+.stButton button:hover {
+    background-color: #2b6cb0 !important;
+}
+
+/* FEATURE CARDS */
+.feature-card {
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+.feature-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+.feature-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+    color: #2c3e50;
+}
+.feature-description {
+    font-size: 0.9rem;
+    color: #555;
+}
+
+/* ITEM CARD */
+.item-card {
+    display: flex;
+    align-items: center;
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+.item-icon {
+    font-size: 2rem;
+    margin-right: 1rem;
+}
+.item-name {
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: #2c3e50;
+}
+.item-cost {
+    margin-left: auto;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
+/* FACTOR CARDS */
+.factor-card {
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+.factor-letter {
+    width: 40px;
+    height: 40px;
+    background-color: #3182CE;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin-right: 1rem;
+}
+.factor-description {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.2rem;
+    color: #2c3e50;
+}
+.factor-explanation {
+    font-size: 0.85rem;
+    color: #555;
+}
+.factor-value {
+    margin-left: auto;
+    font-weight: 600;
+    font-size: 1rem;
+}
+.factor-value.positive { color: #48bb78; }
+.factor-value.neutral { color: #ed8936; }
+.factor-value.negative { color: #f56565; }
+
+/* RECOMMENDATION BOX */
+.recommendation-box {
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+.recommendation-score {
+    text-align: left;
+}
+.score-label {
+    font-size: 0.8rem;
+    color: #8898aa;
+    margin-bottom: 0.2rem;
+}
+.score-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+}
+.recommendation-text {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    color: #2c3e50;
+}
+.recommendation-icon {
+    font-size: 1.5rem;
+    margin-right: 0.5rem;
+}
+.positive .recommendation-icon { color: #48bb78; }
+.negative .recommendation-icon { color: #f56565; }
+.neutral .recommendation-icon { color: #ed8936; }
+
+/* INSIGHTS SECTION */
+.insights-header {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+.insight-item {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.2rem;
+}
+
+/* SAMPLE CARDS */
+.sample-card {
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+.sample-title {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+    color: #2c3e50;
+}
+.sample-recommendation {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+.sample-recommendation.negative {
+    color: #f56565;
+}
+.sample-recommendation.positive {
+    color: #48bb78;
+}
+.sample-insight {
+    font-size: 0.85rem;
+    color: #555;
+}
+
+/* PAGE TITLES */
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 1rem 0 1rem;
+    color: #2c3e50;
+}
+
+/* FORM SECTIONS */
+.form-section {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+
+/* CTA STYLING */
+.cta-container {
+    margin-top:1.5rem;
+    margin-bottom:1rem;
+    text-align:center;
+}
+.cta-text {
+    font-weight:600; 
+    font-size:1.2rem; 
+    color: #2c3e50;
+}
+</style>
+"""
+
+# -------------------------------------------------------------------
+# Apply the custom CSS to the app
+# -------------------------------------------------------------------
+st.markdown(custom_css, unsafe_allow_html=True)
+
+
+# -------------------------------------------------------------------
+# STREAMLIT PAGE CONFIG
+# -------------------------------------------------------------------
 st.set_page_config(
     page_title="Munger AI - Should You Buy It?",
     page_icon="💰",
@@ -45,102 +330,28 @@ st.set_page_config(
     }
 )
 
-# ---------------------------------------
-# SET YOUR TEST API KEY HERE
-# (For actual production, store securely in st.secrets or environment variables)
-# ---------------------------------------
-API_KEY = "AIzaSyB-RIjhhODp6aPTzqVcwbXD894oebXFCUY"  # <-- Your test key here
-
+# -------------------------------------------------------------------
+# SET YOUR GOOGLE GENERATIVE AI KEY
+# -------------------------------------------------------------------
+API_KEY = os.environ.get("GOOGLE_API_KEY", "my_test_api_key_123")  # test key as fallback
 if not API_KEY:
-    st.error("Please set your Google API key in the code or in secrets.toml.")
+    st.error("Please set your Google API key in your environment or secrets.")
     st.stop()
 
-# Attempt to configure Generative AI
 try:
     genai.configure(api_key=API_KEY)
 except Exception as e:
-    st.error(f"Failed to configure the Google Generative AI service: {str(e)}")
+    st.error(f"Failed to configure Google Generative AI: {str(e)}")
     st.stop()
 
-# ---------------------------------------
-# IMPORT CUSTOM CSS (WITH FALLBACK)
-# ---------------------------------------
-try:
-    with open("styles.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-except FileNotFoundError:
-    st.warning("styles.css file not found. Default styling will be used.")
-    st.markdown(
-        """
-        <style>
-        .app-title {
-            font-weight: 800;
-            font-size: 2.5rem;
-            color: #5a67d8;
-        }
-        .app-subtitle {
-            font-weight: 400;
-            font-size: 1.1rem;
-            color: #718096;
-        }
-        .logo-container {
-            font-size: 2.4rem;
-            font-weight: 900;
-            text-align: center;
-            color: #5a67d8;
-        }
-        /* Minimal fallback for other classes used below */
-        .factor-card, .item-card, .recommendation-box, .feature-card, .sample-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: #fff;
-        }
-        .sidebar-header {
-            font-weight: 700;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .sidebar-subheader {
-            font-weight: 600;
-            font-size: 1rem;
-            margin-top: 1rem;
-        }
-        .home-intro {
-            background: #f7fafc;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-        }
-        .home-title {
-            font-weight: 700;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .page-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            margin-top: 1rem;
-            margin-bottom: 1rem;
-        }
-        .form-section {
-            font-weight: 600;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-        .factor-value.positive { color: #48bb78; }
-        .factor-value.neutral { color: #ed8936; }
-        .factor-value.negative { color: #f56565; }
-        /* Just a few minimal fallback styles */
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+# -------------------------------------------------------------------
+# LOGGING
+# -------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
 
-# ---------------------------------------
+# -------------------------------------------------------------------
 # UI HELPER FUNCTIONS
-# ---------------------------------------
+# -------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def display_header():
     """Display the app header with logo and title."""
@@ -162,7 +373,7 @@ def create_radar_chart(factors):
     categories = ["Discretionary Income", "Opportunity Cost", "Goal Alignment",
                   "Long-Term Impact", "Behavioral"]
     vals = [factors["D"], factors["O"], factors["G"], factors["L"], factors["B"]]
-    # Close the radar shape by repeating the first value
+    # Close the radar shape
     vals.append(vals[0])
     categories.append(categories[0])
 
@@ -171,8 +382,8 @@ def create_radar_chart(factors):
         r=vals,
         theta=categories,
         fill='toself',
-        fillcolor='rgba(90, 103, 216, 0.2)',
-        line=dict(color='#5a67d8', width=2),
+        fillcolor='rgba(49, 130, 206, 0.2)',
+        line=dict(color='#3182CE', width=2),
         name='Factors'
     ))
 
@@ -241,10 +452,9 @@ def create_pds_gauge(pds):
     )
     return fig
 
-
-# ---------------------------------------
+# -------------------------------------------------------------------
 # GEMINI SERVICE CLASS
-# ---------------------------------------
+# -------------------------------------------------------------------
 class EnhancedGeminiService:
     """
     Enhanced Gemini service for purchase decision analysis with improved
@@ -252,7 +462,6 @@ class EnhancedGeminiService:
     """
 
     def __init__(self, model_name="gemini-1.5-pro"):
-        """Initialize the Gemini service."""
         self.model_name = model_name
         try:
             self.model = genai.GenerativeModel(model_name)
@@ -293,7 +502,6 @@ class EnhancedGeminiService:
 
     def _create_enhanced_prompt(self, context):
         """Create an enhanced prompt with clear instructions."""
-        # Extract context variables
         item_name = context.get("item_name", "Unknown Item")
         item_cost = context.get("item_cost", 0)
         leftover_income = context.get("leftover_income", 0)
@@ -302,10 +510,10 @@ class EnhancedGeminiService:
         urgency = context.get("purchase_urgency", "Mixed")
         extra_context = context.get("extra_context", "")
 
-        # Calculate income-to-cost ratio for better context
+        # Ratio
         income_cost_ratio = leftover_income / max(1, item_cost)
 
-        # Create the enhanced prompt
+        # Prompt
         prompt = f"""
         You are a financial decision assistant based on Charlie Munger's mental models.
 
@@ -330,38 +538,38 @@ class EnhancedGeminiService:
 
         ## D: DISCRETIONARY INCOME FACTOR
         - +2: Excellent affordability (cost < 10% of monthly leftover income)
-        - +1: Good affordability (cost 10-25% of monthly leftover income)
-        - 0: Moderate affordability (cost 25-50% of monthly leftover income)
-        - -1: Challenging affordability (cost 50-100% of monthly leftover income)
-        - -2: Poor affordability (cost > 100% of monthly leftover income)
+        - +1: Good affordability (cost 10-25%)
+        - 0: Moderate (25-50%)
+        - -1: Challenging (50-100%)
+        - -2: Poor (>100%)
 
         ## O: OPPORTUNITY COST FACTOR
-        - +2: Purchase delivers exceptional value vs. alternatives
-        - +1: Purchase delivers good value vs. alternatives
-        - 0: Purchase has equivalent value to alternatives
-        - -1: Better financial alternatives exist
-        - -2: Significantly better alternatives exist (especially with high-interest debt)
+        - +2: Exceptional value vs. alternatives
+        - +1: Good value
+        - 0: Equivalent
+        - -1: Better alternatives exist
+        - -2: Significantly better alternatives exist
 
         ## G: GOAL ALIGNMENT FACTOR
         - +2: Directly accelerates primary financial goal
-        - +1: Somewhat supports primary financial goal
-        - 0: Neutral impact on financial goals
-        - -1: Slightly delays financial goals
-        - -2: Directly contradicts primary financial goal
+        - +1: Somewhat supports
+        - 0: Neutral
+        - -1: Slightly delays
+        - -2: Directly contradicts
 
         ## L: LONG-TERM IMPACT FACTOR
-        - +2: Delivers long-term value, appreciates or generates income
-        - +1: Durable, retains value, low maintenance costs
-        - 0: Average lifespan with normal depreciation
-        - -1: Rapid depreciation or requires ongoing costs
-        - -2: Temporary value with significant future costs
+        - +2: Delivers long-term value or income
+        - +1: Durable
+        - 0: Average lifespan
+        - -1: Rapid depreciation or ongoing costs
+        - -2: Minimal long-term value
 
         ## B: BEHAVIORAL FACTOR
         - +2: Essential need with immediate utility
-        - +1: Practical need with good utility
+        - +1: Practical need
         - 0: Mix of need and want
-        - -1: Primarily want-based with limited utility
-        - -2: Pure impulse purchase with minimal utility
+        - -1: Primarily want-based
+        - -2: Pure impulse purchase
 
         # OUTPUT FORMAT
         Return a valid JSON object with this exact structure:
@@ -384,18 +592,18 @@ class EnhancedGeminiService:
         return prompt
 
     def _process_response(self, text):
-        """Process the response from Gemini with robust JSON extraction."""
-        logging.info(f"Processing Gemini response: {text[:100]}...")
+        """Process JSON from Gemini with robust fallback parsing."""
+        logging.info(f"Processing Gemini response: {text[:80]}...")
 
-        # 1. Attempt direct JSON parsing
+        # 1. Attempt direct JSON
         try:
             data = json.loads(text)
             if self._validate_factors(data):
                 return data
         except json.JSONDecodeError:
-            logging.warning("Direct JSON parsing failed, trying regex extraction...")
+            pass
 
-        # 2. Attempt regex-based JSON extraction
+        # 2. Attempt regex-based extraction
         json_matches = re.findall(r"(\{[\s\S]*?\})", text)
         for json_str in json_matches:
             try:
@@ -405,27 +613,23 @@ class EnhancedGeminiService:
             except json.JSONDecodeError:
                 continue
 
-        # 3. Fallback structured extraction if no valid JSON found
+        # 3. Fallback
         return self._extract_structured_data(text)
 
     def _validate_factors(self, data):
-        """Validate that all required factors are present and in range."""
+        """Validate factor presence and ranges."""
         required_factors = ["D", "O", "G", "L", "B"]
-        # Check all factors exist
-        if not all(factor in data for factor in required_factors):
+        if not all(f in data for f in required_factors):
             return False
-
-        # Check all factors are integers in [-2, 2]
-        for factor in required_factors:
-            value = data[factor]
-            if not isinstance(value, int) or value < -2 or value > 2:
+        for f in required_factors:
+            val = data[f]
+            if not isinstance(val, int) or val < -2 or val > 2:
                 return False
-
         return True
 
     def _extract_structured_data(self, text):
-        """Extract structured data from the text when JSON parsing fails."""
-        logging.info("Falling back to structured data extraction")
+        """Fallback extraction if no valid JSON found."""
+        logging.info("Falling back to structured data extraction.")
         result = {
             "D": 0, "O": 0, "G": 0, "L": 0, "B": 0,
             "D_explanation": "",
@@ -436,71 +640,49 @@ class EnhancedGeminiService:
             "insights": []
         }
 
-        # Extract factor scores using regex
-        factor_patterns = {
-            "D": r"D:\s*([+-]?\d+)",
-            "O": r"O:\s*([+-]?\d+)",
-            "G": r"G:\s*([+-]?\d+)",
-            "L": r"L:\s*([+-]?\d+)",
-            "B": r"B:\s*([+-]?\d+)"
-        }
-        for factor, pattern in factor_patterns.items():
-            match = re.search(pattern, text)
+        # Factor patterns
+        for f in ["D", "O", "G", "L", "B"]:
+            match = re.search(rf"{f}:\s*([+-]?\d+)", text)
             if match:
                 try:
-                    value = int(match.group(1))
-                    # Ensure value is in range [-2, 2]
-                    result[factor] = max(-2, min(2, value))
-                except (ValueError, IndexError):
+                    val = int(match.group(1))
+                    result[f] = max(-2, min(2, val))
+                except:
                     pass
 
-        # Extract explanations (very rough fallback approach)
-        for factor in ["D", "O", "G", "L", "B"]:
-            explanation_pattern = rf"{factor}_explanation['\"]?\s*:\s*['\"]([^\"']+)"
-            match = re.search(explanation_pattern, text)
+        # Explanations
+        for f in ["D", "O", "G", "L", "B"]:
+            expl_pattern = rf"{f}_explanation['\"]?\s*:\s*['\"]([^\"']+)"
+            match = re.search(expl_pattern, text)
             if match:
-                result[f"{factor}_explanation"] = match.group(1).strip()
-
-        # Try to extract insights
-        insights_pattern = r"insights?:?\s*\[([^\]]+)\]"
-        match = re.search(insights_pattern, text, re.IGNORECASE)
-        if match:
-            # Split on commas in the bracket
-            raw_insights = match.group(1).split(',')
-            insights = [ins.strip().strip('"\'') for ins in raw_insights]
-            result["insights"] = insights
+                result[f"{f}_explanation"] = match.group(1).strip()
 
         return result
 
-    def _create_fallback_response(self, error_message):
-        """Create a fallback response when the API call fails."""
-        logging.error(f"Analysis error: {error_message}")
+    def _create_fallback_response(self, msg):
+        logging.error(f"Analysis error: {msg}")
         return {
             "D": 0, "O": 0, "G": 0, "L": 0, "B": 0,
-            "D_explanation": "Unable to analyze with the provided information.",
-            "O_explanation": "Unable to analyze with the provided information.",
-            "G_explanation": "Unable to analyze with the provided information.",
-            "L_explanation": "Unable to analyze with the provided information.",
-            "B_explanation": "Unable to analyze with the provided information.",
+            "D_explanation": "Unable to analyze.",
+            "O_explanation": "Unable to analyze.",
+            "G_explanation": "Unable to analyze.",
+            "L_explanation": "Unable to analyze.",
+            "B_explanation": "Unable to analyze.",
             "insights": [
-                "Consider your budget constraints before making this purchase.",
-                "Technical issue occurred during analysis."
+                "Consider your budget constraints first.",
+                "Technical error occurred."
             ],
-            "error": error_message
+            "error": msg
         }
 
-
-# ---------------------------------------
-# UTILITY FUNCTIONS
-# ---------------------------------------
+# -------------------------------------------------------------------
+# UTILITY
+# -------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def compute_pds(factors):
-    """Compute the Purchase Decision Score (PDS) from factors."""
     return sum(factors.get(f, 0) for f in ["D", "O", "G", "L", "B"])
 
-
 def get_recommendation(pds):
-    """Get recommendation text and class based on PDS score."""
     if pds >= 5:
         return "Buy it.", "positive"
     elif pds < 0:
@@ -508,9 +690,7 @@ def get_recommendation(pds):
     else:
         return "Consider carefully.", "neutral"
 
-
 def render_factor_card(factor, value, description, explanation):
-    """Render a factor card with score and explanation."""
     if value > 0:
         val_class = "positive"
         icon = "↑"
@@ -525,7 +705,7 @@ def render_factor_card(factor, value, description, explanation):
     <div class="factor-card">
         <div class="factor-letter">{factor}</div>
         <div class="factor-info">
-            <div class="factor-description" style="font-weight:600;">{description}</div>
+            <div class="factor-description">{description}</div>
             <div class="factor-explanation">{explanation}</div>
         </div>
         <div class="factor-value {val_class}">{icon} {value:+d}</div>
@@ -533,10 +713,7 @@ def render_factor_card(factor, value, description, explanation):
     """
     st.markdown(html, unsafe_allow_html=True)
 
-
 def render_item_card(item_name, cost):
-    """Render an item card with icon and cost."""
-    # Simple logic: if cost is >= 1000, show a briefcase icon
     icon = "💼" if cost >= 1000 else "🛍️"
     html = f"""
     <div class="item-card">
@@ -549,9 +726,7 @@ def render_item_card(item_name, cost):
     """
     st.markdown(html, unsafe_allow_html=True)
 
-
 def render_recommendation_box(pds, recommendation, rec_class):
-    """Render a recommendation box with PDS score and recommendation."""
     icon = "✅" if rec_class == "positive" else "❌" if rec_class == "negative" else "⚠️"
     html = f"""
     <div class="recommendation-box {rec_class}">
@@ -567,17 +742,12 @@ def render_recommendation_box(pds, recommendation, rec_class):
     """
     st.markdown(html, unsafe_allow_html=True)
 
-
 def display_insights(insights):
-    """Display insights from the analysis."""
-    st.markdown('<div class="insights-header" style="font-weight:600; margin-top:1rem;">INSIGHTS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="insights-header">INSIGHTS</div>', unsafe_allow_html=True)
     for insight in insights:
         st.markdown(f'<div class="insight-item">💡 {insight}</div>', unsafe_allow_html=True)
 
-
-# ---------------------------------------
-# FACTOR DESCRIPTIONS
-# ---------------------------------------
+# Factor descriptions
 factor_descriptions = {
     "D": "Discretionary Income",
     "O": "Opportunity Cost",
@@ -586,26 +756,18 @@ factor_descriptions = {
     "B": "Behavioral"
 }
 
-# ---------------------------------------
-# SESSION STATE INITIALIZATION
-# ---------------------------------------
+# -------------------------------------------------------------------
+# SESSION STATE INIT
+# -------------------------------------------------------------------
 def initialize_session_state():
-    """Initialize session state variables."""
     if 'page' not in st.session_state:
         st.session_state.page = 'home'
-
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
-
     if 'purchase_info' not in st.session_state:
         st.session_state.purchase_info = None
 
-
-# ---------------------------------------
-# DISPLAY ANALYSIS RESULTS
-# ---------------------------------------
 def display_analysis_results():
-    """Display the analysis results from Gemini."""
     if not st.session_state.analysis_results or not st.session_state.purchase_info:
         st.info("No analysis results available.")
         return
@@ -613,76 +775,63 @@ def display_analysis_results():
     factors = st.session_state.analysis_results
     purchase_info = st.session_state.purchase_info
 
-    # Compute PDS
+    # PDS
     pds = compute_pds(factors)
     recommendation, rec_class = get_recommendation(pds)
 
     st.markdown("## Analysis Results")
     st.write("---")
 
-    # Render item card
-    item_name = purchase_info["item_name"]
-    item_cost = purchase_info["item_cost"]
-    render_item_card(item_name, item_cost)
+    # Item card
+    render_item_card(purchase_info["item_name"], purchase_info["item_cost"])
 
-    # Render recommendation
+    # Recommendation
     render_recommendation_box(pds, recommendation, rec_class)
 
-    # Factor Breakdown
+    # Factor breakdown
     st.markdown("### Factor Breakdown")
     col1, col2 = st.columns(2)
-
     with col1:
-        render_factor_card("D", factors["D"], factor_descriptions["D"], factors.get("D_explanation", ""))
-        render_factor_card("O", factors["O"], factor_descriptions["O"], factors.get("O_explanation", ""))
-
+        render_factor_card("D", factors["D"], factor_descriptions["D"], factors["D_explanation"])
+        render_factor_card("O", factors["O"], factor_descriptions["O"], factors["O_explanation"])
     with col2:
-        render_factor_card("G", factors["G"], factor_descriptions["G"], factors.get("G_explanation", ""))
-        render_factor_card("L", factors["L"], factor_descriptions["L"], factors.get("L_explanation", ""))
+        render_factor_card("G", factors["G"], factor_descriptions["G"], factors["G_explanation"])
+        render_factor_card("L", factors["L"], factor_descriptions["L"], factors["L_explanation"])
 
-    render_factor_card("B", factors["B"], factor_descriptions["B"], factors.get("B_explanation", ""))
+    render_factor_card("B", factors["B"], factor_descriptions["B"], factors["B_explanation"])
 
-    # Radar Chart
+    # Radar
     st.markdown("### Factor Radar Chart")
     radar_fig = create_radar_chart(factors)
     st.plotly_chart(radar_fig, use_container_width=True)
 
-    # PDS Gauge
+    # Gauge
     st.markdown("### Purchase Decision Score Gauge")
     gauge_fig = create_pds_gauge(pds)
     st.plotly_chart(gauge_fig, use_container_width=True)
 
     # Insights
-    insights = factors.get("insights", [])
-    if insights:
-        display_insights(insights)
+    if factors.get("insights"):
+        display_insights(factors["insights"])
 
 
-# ---------------------------------------
-# GEMINI SERVICE (SINGLETON)
-# ---------------------------------------
+# -------------------------------------------------------------------
+# SIDEBAR NAV
+# -------------------------------------------------------------------
 gemini_service = None
 
-
-# ---------------------------------------
-# SIDEBAR NAVIGATION
-# ---------------------------------------
 def render_sidebar():
-    """Render the sidebar navigation."""
     with st.sidebar:
         st.markdown('<div class="sidebar-header">Munger AI</div>', unsafe_allow_html=True)
         st.markdown('<div class="sidebar-subheader">NAVIGATION</div>', unsafe_allow_html=True)
 
-        if st.button("🏠 Home", key="nav_home", help="Go to the home page"):
+        if st.button("🏠 Home", key="nav_home"):
             st.session_state.page = 'home'
-
-        if st.button("🔍 Decision Tool", key="nav_decision_tool", help="Go to the decision tool"):
+        if st.button("🔍 Decision Tool", key="nav_decision_tool"):
             st.session_state.page = 'decision_tool'
-
-        if st.button("⚙️ Advanced Tool", key="nav_advanced_tool", help="Go to the advanced tool"):
+        if st.button("⚙️ Advanced Tool", key="nav_advanced_tool"):
             st.session_state.page = 'advanced_tool'
 
-        # About section
         st.markdown('<div class="sidebar-subheader">ABOUT</div>', unsafe_allow_html=True)
         st.markdown(
             """
@@ -694,78 +843,31 @@ def render_sidebar():
             unsafe_allow_html=True
         )
 
-        # Factors explanation
         st.markdown('<div class="sidebar-subheader">FACTORS</div>', unsafe_allow_html=True)
-
         with st.expander("D: Discretionary Income"):
-            st.markdown(
-                """
-                - +2: Cost < 10% of monthly leftover income  
-                - +1: Cost 10-25% of monthly leftover income  
-                -  0: Cost 25-50% of monthly leftover income  
-                - -1: Cost 50-100% of monthly leftover income  
-                - -2: Cost > 100% of monthly leftover income
-                """
-            )
-
+            st.markdown(" - +2: Cost < 10% leftover\n - -2: Cost > 100% leftover")
         with st.expander("O: Opportunity Cost"):
-            st.markdown(
-                """
-                - +2: Exceptional value vs. alternatives  
-                - +1: Good value vs. alternatives  
-                -  0: Equivalent value  
-                - -1: Better alternatives exist  
-                - -2: Significantly better alternatives exist
-                """
-            )
-
+            st.markdown(" - +2: Exceptional value\n - -2: Much better alternatives")
         with st.expander("G: Goal Alignment"):
-            st.markdown(
-                """
-                - +2: Directly accelerates primary financial goal  
-                - +1: Somewhat supports financial goal  
-                -  0: Neutral impact  
-                - -1: Slight delay  
-                - -2: Direct contradiction of goal
-                """
-            )
-
+            st.markdown(" - +2: Directly supports goals\n - -2: Directly contradicts")
         with st.expander("L: Long-Term Impact"):
-            st.markdown(
-                """
-                - +2: Generates long-term value or income  
-                - +1: Durable, retains value  
-                -  0: Average lifespan  
-                - -1: Rapid depreciation or ongoing costs  
-                - -2: Minimal long-term value, high future cost
-                """
-            )
-
+            st.markdown(" - +2: Long-term value or income\n - -2: Minimal or negative value")
         with st.expander("B: Behavioral Factor"):
-            st.markdown(
-                """
-                - +2: Essential need with immediate utility  
-                - +1: Practical need  
-                -  0: Mix of need & want  
-                - -1: Mostly want-based  
-                - -2: Pure impulse purchase
-                """
-            )
+            st.markdown(" - +2: Essential need\n - -2: Pure impulse purchase")
 
         st.markdown('<div class="sidebar-footer">© 2025 Munger AI</div>', unsafe_allow_html=True)
 
 
-# ---------------------------------------
-# PAGE CONTENT HANDLERS
-# ---------------------------------------
+# -------------------------------------------------------------------
+# PAGES
+# -------------------------------------------------------------------
 def render_home_page():
-    """Render the home page."""
     display_header()
     st.markdown(
         """
-        <div class="home-intro">
-            <div class="home-title">Make smarter purchase decisions</div>
-            <div class="home-description">
+        <div class="home-intro" style="background:#ffffff; padding:1rem; border-radius:8px; margin-bottom:2rem;">
+            <div class="home-title" style="font-weight:700; font-size:1.5rem;">Make smarter purchase decisions</div>
+            <div class="home-description" style="font-size:0.95rem; color:#444;">
                 Powered by AI and inspired by Charlie Munger's mental models, 
                 our tool helps you decide if a purchase is right for you.
             </div>
@@ -776,7 +878,6 @@ def render_home_page():
 
     # Feature grid
     col1, col2, col3 = st.columns(3)
-
     with col1:
         st.markdown(
             """
@@ -790,7 +891,6 @@ def render_home_page():
             """,
             unsafe_allow_html=True
         )
-
     with col2:
         st.markdown(
             """
@@ -804,7 +904,6 @@ def render_home_page():
             """,
             unsafe_allow_html=True
         )
-
     with col3:
         st.markdown(
             """
@@ -819,36 +918,31 @@ def render_home_page():
             unsafe_allow_html=True
         )
 
-    # Call to action
+    # CTA
     st.markdown(
         """
-        <div class="cta-container" style="margin-top:1.5rem; margin-bottom:1rem;">
-            <div class="cta-text" style="font-weight:600; font-size:1.2rem;">
-                Ready to make a purchase decision?
-            </div>
+        <div class="cta-container">
+            <div class="cta-text">Ready to make a purchase decision?</div>
         </div>
         """,
         unsafe_allow_html=True
     )
-
-    col1, col2 = st.columns(2)
-    with col1:
+    colA, colB = st.columns(2)
+    with colA:
         if st.button("🛍️ Basic Analysis", use_container_width=True):
             st.session_state.page = 'decision_tool'
-
-    with col2:
+    with colB:
         if st.button("🔍 Detailed Analysis", use_container_width=True):
             st.session_state.page = 'advanced_tool'
 
-    # Sample insights
-    st.markdown('<div class="sample-header" style="margin-top:2rem; font-weight:600;">SAMPLE INSIGHTS</div>', unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-
-    with col1:
+    # Sample
+    st.markdown('<div class="sample-header" style="margin-top:2rem; font-weight:600; font-size:1rem;">SAMPLE INSIGHTS</div>', unsafe_allow_html=True)
+    colA, colB = st.columns(2)
+    with colA:
         st.markdown(
             """
             <div class="sample-card">
-                <div class="sample-title" style="font-weight:600;">New Smartphone ($1,200)</div>
+                <div class="sample-title">New Smartphone ($1,200)</div>
                 <div class="sample-recommendation negative">Don't buy it</div>
                 <div class="sample-insight">
                     "With high-interest debt, paying it down would yield a better financial return than a new smartphone."
@@ -857,16 +951,14 @@ def render_home_page():
             """,
             unsafe_allow_html=True
         )
-
-    with col2:
+    with colB:
         st.markdown(
             """
             <div class="sample-card">
-                <div class="sample-title" style="font-weight:600;">Professional Course ($800)</div>
+                <div class="sample-title">Professional Course ($800)</div>
                 <div class="sample-recommendation positive">Buy it</div>
                 <div class="sample-insight">
-                    "This investment directly aligns with your career advancement goals 
-                    and has strong potential for a positive ROI."
+                    "This investment directly aligns with your career goals and has strong potential for positive ROI."
                 </div>
             </div>
             """,
@@ -875,7 +967,6 @@ def render_home_page():
 
 
 def render_decision_tool():
-    """Render the basic decision tool page."""
     display_header()
     st.markdown('<div class="page-title">Basic Purchase Decision Tool</div>', unsafe_allow_html=True)
 
@@ -893,12 +984,11 @@ def render_decision_tool():
             has_debt = st.selectbox("Do you have high-interest debt?", ["No", "Yes"])
 
         main_goal = st.text_input("Your main financial goal", value="Build an emergency fund")
-
         col1, col2 = st.columns(2)
         with col1:
             urgency = st.selectbox("Purchase urgency", ["Need", "Mixed", "Want"])
         with col2:
-            st.write("")  # Placeholder for alignment
+            st.write("")  # filler
 
         submit_btn = st.form_submit_button("Analyze My Purchase", use_container_width=True)
 
@@ -910,28 +1000,24 @@ def render_decision_tool():
             "has_high_interest_debt": has_debt,
             "main_financial_goal": main_goal,
             "purchase_urgency": urgency,
-            "extra_context": ""  # Basic tool doesn't collect extra context
+            "extra_context": ""
         }
         st.session_state.purchase_info = purchase_info
 
-        # Call Gemini for analysis
         service = EnhancedGeminiService()
         factors = service.analyze_purchase(purchase_info)
         st.session_state.analysis_results = factors
 
-    # Display results if available
     if st.session_state.analysis_results and st.session_state.purchase_info:
         display_analysis_results()
 
 
 def render_advanced_tool():
-    """Render the advanced decision tool page."""
     display_header()
     st.markdown('<div class="page-title">Advanced Purchase Decision Tool</div>', unsafe_allow_html=True)
 
     with st.form("advanced_form"):
         st.markdown('<div class="form-section">Purchase Details</div>', unsafe_allow_html=True)
-
         col1, col2 = st.columns([3, 1])
         with col1:
             item_name = st.text_input("What are you buying?", value="High-End Laptop")
@@ -945,7 +1031,7 @@ def render_advanced_tool():
             st.caption("Income remaining after essential expenses")
         with col2:
             has_debt = st.selectbox("High-interest debt?", ["No", "Yes"])
-            st.caption("Debt with interest rate above ~8%")
+            st.caption("Debt above ~8% APR")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -956,8 +1042,8 @@ def render_advanced_tool():
             st.caption("How necessary is this purchase?")
 
         st.markdown('<div class="form-section">Additional Context</div>', unsafe_allow_html=True)
-        extra_context = st.text_area("Any additional context about this purchase?", height=100)
-        st.caption("Include any relevant details that might affect the decision")
+        extra_context = st.text_area("Any other details to consider?", height=100)
+        st.caption("Add relevant considerations or constraints")
 
         submit_advanced = st.form_submit_button("Get Detailed Analysis", use_container_width=True)
 
@@ -973,21 +1059,18 @@ def render_advanced_tool():
         }
         st.session_state.purchase_info = purchase_info
 
-        # Call Gemini for analysis
         service = EnhancedGeminiService()
         factors = service.analyze_purchase(purchase_info)
         st.session_state.analysis_results = factors
 
-    # Display results if available
     if st.session_state.analysis_results and st.session_state.purchase_info:
         display_analysis_results()
 
 
-# ---------------------------------------
-# MAIN APPLICATION
-# ---------------------------------------
+# -------------------------------------------------------------------
+# MAIN
+# -------------------------------------------------------------------
 def main():
-    """Main application function."""
     initialize_session_state()
 
     global gemini_service
@@ -995,13 +1078,10 @@ def main():
         try:
             gemini_service = EnhancedGeminiService()
         except Exception as e:
-            st.error(f"Failed to initialize Gemini service: {str(e)}")
-            logging.error(f"Failed to initialize Gemini service: {str(e)}")
+            st.error(f"Failed to initialize Gemini: {str(e)}")
 
-    # Render the sidebar
     render_sidebar()
 
-    # Route to the appropriate page
     if st.session_state.page == 'home':
         render_home_page()
     elif st.session_state.page == 'decision_tool':
@@ -1009,13 +1089,9 @@ def main():
     elif st.session_state.page == 'advanced_tool':
         render_advanced_tool()
     else:
-        # Default to home if unknown page
         render_home_page()
 
 
-# ---------------------------------------
-# ENTRY POINT
-# ---------------------------------------
 if __name__ == "__main__":
     try:
         main()
